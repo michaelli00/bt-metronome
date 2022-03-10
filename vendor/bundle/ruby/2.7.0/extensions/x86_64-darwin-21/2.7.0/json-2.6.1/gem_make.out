@@ -1,0 +1,13 @@
+current directory: /Users/mli25782/bt_metronome/vendor/bundle/ruby/2.7.0/gems/json-2.6.1/ext/json
+/Users/mli25782/.rvm/rubies/ruby-2.7.4/bin/ruby -I /Users/mli25782/.rvm/rubies/ruby-2.7.4/lib/ruby/2.7.0 -r ./siteconf20220309-75080-dmzuhh.rb extconf.rb
+creating Makefile
+
+current directory: /Users/mli25782/bt_metronome/vendor/bundle/ruby/2.7.0/gems/json-2.6.1/ext/json
+make "DESTDIR=" clean
+
+current directory: /Users/mli25782/bt_metronome/vendor/bundle/ruby/2.7.0/gems/json-2.6.1/ext/json
+make "DESTDIR="
+make: Nothing to be done for `all'.
+
+current directory: /Users/mli25782/bt_metronome/vendor/bundle/ruby/2.7.0/gems/json-2.6.1/ext/json
+make "DESTDIR=" install
