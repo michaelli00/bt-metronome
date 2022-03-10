@@ -25,6 +25,7 @@ export default class App extends React.Component {
     this.state = {
       bpm: 80,
       playing: false,
+      nextBeat: Date().now,
     };
   }
 
@@ -64,6 +65,9 @@ export default class App extends React.Component {
 
   replaySound = () => {
     const {bpm} = this.state;
+    this.setState({
+      nextBeat: Date.now() + SECONDS_AS_MILLISECONDS / bpm,
+    });
     SoundPlayer.playSoundFile('MetronomeUp', 'wav');
     this.timeout = setTimeout(this.replaySound, SECONDS_AS_MILLISECONDS / bpm);
   };
@@ -71,12 +75,16 @@ export default class App extends React.Component {
   playSound = () => {
     const {bpm} = this.state;
     SoundPlayer.playSoundFile('MetronomeUp', 'wav');
-    this.setState({playing: true});
+    this.setState({
+      playing: true,
+      nextBeat: Date.now() + SECONDS_AS_MILLISECONDS / bpm,
+    });
     this.timeout = setTimeout(this.replaySound, SECONDS_AS_MILLISECONDS / bpm);
   };
 
   render() {
     const {bpm, playing} = this.state;
+    console.log(this.state.nextBeat);
     return (
       <SafeAreaProvider>
         <Header
