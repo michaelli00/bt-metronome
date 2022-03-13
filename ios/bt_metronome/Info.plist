@@ -51,8 +51,6 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-  <key>NSBluetoothAlwaysUsageDescription</key>
-	<string>To use bluetooth</string>
   <key>UIAppFonts</key>
   <array>
     <string>AntDesign.ttf</string>
@@ -70,6 +68,19 @@
     <string>SimpleLineIcons.ttf</string>
     <string>Octicons.ttf</string>
     <string>Zocial.ttf</string>
+  </array>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>To use bluetooth</string>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+	<string>To use bluetooth</string>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>bluetooth-central</string>
+    <string>bluetooth-peripheral</string>
+  </array>
+  <key>UIRequiredDeviceCapabilities</key>
+  <array>
+    <string>bluetooth-le</string>
   </array>
 </dict>
 </plist>
