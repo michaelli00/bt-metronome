@@ -6,12 +6,16 @@ import {
   NativeModules,
   NativeEventEmitter,
 } from 'react-native';
-import BleManager from 'react-native-ble-manager';
 import {Dial} from 'react-native-dial';
 import {Button, Header} from 'react-native-elements';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import SoundPlayer from 'react-native-sound-player';
+
 import BLEAdvertiser from 'react-native-ble-advertiser';
+import BleManager from 'react-native-ble-manager';
+import Peripheral, {Service, Characteristic} from 'react-native-peripheral';
+
+import {stringToBytes, bytesToString} from 'convert-string';
 
 // var onFinishedLoadingFileSubscription = null;
 
@@ -19,7 +23,8 @@ const SECONDS_AS_MILLISECONDS = 60000;
 const MAX_METRONOME_BPM = 250;
 const APPLE_ID = 0x4c;
 // const MANUF_DATA = [1,0];
-const BLE_SERVICE_UUID = '42A8A87A-F71C-446B-B81D-0CD16A709625';
+const BLE_SERVICE_UUID = '42A8A87A-0000-446B-B81D-0CD16A709625';
+const BLE_CHARACTERISTC_UUID = '42A8A87A-0001-446B-B81D-0CD16A709625';
 
 BLEAdvertiser.setCompanyId(APPLE_ID);
 const BleManagerModule = NativeModules.BleManager;
@@ -40,17 +45,51 @@ export default class App extends React.Component {
     // onFinishedLoadingFileSubscription = SoundPlayer.addEventListener('FinishedLoadingFile', ({ success, name, type }) => {
     //   console.log('finished loading file', success, name, type);
     // });
-
-    BLEAdvertiser.broadcast(BLE_SERVICE_UUID, [], {})
-      .then(success => console.log('Broadcasting Sucessful', success))
-      .catch(error => console.log('Broadcasting Error', error));
+    //
 
     bleManagerEmitter.addListener(
       'BleManagerDiscoverPeripheral',
       this.handleDiscoverPeripheral,
     );
-
     bleManagerEmitter.addListener('BleManagerStopScan', this.handleStopScan);
+    bleManagerEmitter.addListener(
+      'BleManagerDidUpdateValueForCharacteristic',
+      ({value, peripheral, characteristic, service}) => {
+        // Convert bytes array to string
+        const data = bytesToString(value);
+        console.log(
+          `Recieved ${data} from ${peripheral.id} for service ${service} and characteristic ${characteristic}`,
+        );
+      },
+    );
+
+    Peripheral.onStateChanged(state => {
+      const {bpm} = this.state;
+      if (state === 'poweredOn') {
+        const ch = new Characteristic({
+          uuid: BLE_CHARACTERISTC_UUID,
+          onReadRequest: async () => bpm,
+          onWriteRequest: async value => this.setState({bpm: value}),
+          properties: ['read', 'write'],
+          permissions: ['readable', 'writeable'],
+        });
+
+        const service = new Service({
+          uuid: BLE_SERVICE_UUID,
+          characteristics: [ch],
+        });
+
+        Peripheral.addService(service).then(() => {
+          // Peripheral.startAdvertising({
+          //   name: 'BT Metronome',
+          //   serviceUuids: [BLE_SERVICE_UUID],
+          // });
+          BLEAdvertiser.broadcast(BLE_SERVICE_UUID, [], {})
+            .then(success => console.log('Broadcasting Sucessful', success))
+            .catch(error => console.log('Broadcasting Error', error));
+        });
+      }
+    });
 
     BleManager.start({showAlert: false}).then(() => {
       BleManager.scan([BLE_SERVICE_UUID], 10, false).then(() => {
@@ -60,24 +99,6 @@ export default class App extends React.Component {
     });
   }
 
-  handleDiscoverPeripheral = async peripheral => {
-    const {peripherals} = this.state;
-    console.log('Got ble peripheral', peripheral, peripheral.name, peripherals);
-    peripherals[peripheral.id] = peripheral;
-    // BleManager.connect(peripheral.id)
-    //   .then(() => {
-    //     console.log(`Connected to ${peripheral.id}`);
-    //   })
-    //   .catch(error => {
-    //     console.log('Failed to connect to ' + peripheral.id, error);
-    //   });
-    this.setState({peripherals: {...peripherals}});
-    await BleManager.connect(peripheral.id);
-    await BleManager.retrieveServices(peripheral.id);
-    // peripherals.set(peripheral.id, peripheral);
-    // setList(Array.from(peripherals.values()));
-  };
-
   componentWillUnmount() {
     // TODO disconnect devices
     BLEAdvertiser.stopBroadcast()
@@ -86,32 +107,83 @@ export default class App extends React.Component {
     // onFinishedLoadingFileSubscription.remove();
   }
 
+  handleDiscoverPeripheral = peripheral => {
+    const {peripherals} = this.state;
+    console.log('found', peripheral);
+    peripherals[peripheral.id] = peripheral;
+    // BleManager.connect(peripheral.id)
+    //   .then(() => {
+    //     console.log(`Connected to ${peripheral.id}`);
+    //   })
+    //   .catch(error => {
+    //   });
+    this.setState({peripherals: {...peripherals}});
+    BleManager.connect(peripheral.id)
+      .then(() => {
+        console.log('connected to ' + peripheral.id);
+        BleManager.retrieveServices(peripheral.id)
+          .then(() => {
+            console.log('retrieveServices from ' + peripheral.id);
+            BleManager.startNotification(
+              peripheral.id,
+              BLE_SERVICE_UUID,
+              BLE_CHARACTERISTC_UUID,
+            )
+              .then(() => console.log('called start notifications', peripheral.id))
+              .catch(() => console.log('called start notifications', peripheral.id));
+          })
+          .catch(error => console.log('error in retrieveServices', error));
+      })
+      .catch(error => console.log('failed to connect to ' + peripheral.id, error));
+    // peripherals.set(peripheral.id, peripheral);
+    // setList(Array.from(peripherals.values()));
+  };
+
   handleStopScan = () => {
     // console.log('Scan stopped. Devices: ', this.state.peripherals);
   };
 
-  stopSound = () => {
+  handleStopSound = () => {
     clearInterval(this.timeout);
     this.setState({playing: false});
   };
 
-  replaySound = () => {
+  handleReplaySound = () => {
     const {bpm} = this.state;
     this.setState({
       nextBeat: Date.now() + SECONDS_AS_MILLISECONDS / bpm,
     });
     SoundPlayer.playSoundFile('MetronomeUp', 'wav');
-    this.timeout = setTimeout(this.replaySound, SECONDS_AS_MILLISECONDS / bpm);
+    this.timeout = setTimeout(
+      this.handleReplaySound,
+      SECONDS_AS_MILLISECONDS / bpm,
+    );
   };
 
-  playSound = () => {
-    const {bpm} = this.state;
+  handlePlaySound = () => {
+    const {bpm, peripherals} = this.state;
     SoundPlayer.playSoundFile('MetronomeUp', 'wav');
+    const nextBeat = Date.now() + SECONDS_AS_MILLISECONDS / bpm;
     this.setState({
       playing: true,
-      nextBeat: Date.now() + SECONDS_AS_MILLISECONDS / bpm,
+      nextBeat: nextBeat,
     });
-    this.timeout = setTimeout(this.replaySound, SECONDS_AS_MILLISECONDS / bpm);
+    const dataString = `${bpm} ${nextBeat}`;
+    const data = stringToBytes(dataString);
+    console.log('called write');
+    Object.keys(peripherals).forEach(id => {
+      BleManager.retrieveServices(id)
+        .then(() => {
+          BleManager.write(id, BLE_SERVICE_UUID, BLE_CHARACTERISTC_UUID, data)
+            .then(() => console.log('wrote to ', id))
+            .catch(error => console.log('error while writing to ' + id, error));
+        })
+        .catch(error => console.log('error in retrieveServices in write call', error));
+    });
+    this.timeout = setTimeout(
+      this.handleReplaySound,
+      SECONDS_AS_MILLISECONDS / bpm,
+    );
   };
 
   render() {
@@ -133,7 +205,9 @@ export default class App extends React.Component {
               size: 30,
               color: 'white',
             }}
-            onPress={() => (playing ? this.stopSound() : this.playSound())}
+            onPress={() =>
+              playing ? this.handleStopSound() : this.handlePlaySound()
+            }
           />
           <Dial
             initialAngle={bpm}
